@@ -1,34 +1,31 @@
-"""Generate Mermaid diagram from the agent workflow graph."""
+"""Generate workflow diagram as PNG from Mermaid."""
 
-from agents.workflow import AgentWorkflow
+import subprocess
 from pathlib import Path
 
 
 def main():
-    workflow = AgentWorkflow()
-    graph = workflow.compiled_workflow.get_graph()
-
-    # Generate Mermaid text
-    mermaid_text = graph.draw_mermaid()
-
-    # Save to file
+    mermaid_path = Path("diagrama/workflow.mmd")
     output_dir = Path("diagrama")
-    output_dir.mkdir(exist_ok=True)
 
-    mermaid_path = output_dir / "workflow.mmd"
-    mermaid_path.write_text(mermaid_text)
-    print(f"Mermaid saved to: {mermaid_path}")
+    if not mermaid_path.exists():
+        print("Run 'python generate_diagram.py' first to create the .mmd file")
+        return
 
-    # Also save as PNG if graphviz is installed
+    # Use mmdc (Mermaid CLI) to generate PNG
+    png_path = output_dir / "workflow.png"
     try:
-        png_path = output_dir / "workflow.png"
-        graph.draw_mermaid_png(str(png_path))
+        subprocess.run(
+            ["mmdc", "-i", str(mermaid_path), "-o", str(png_path), "-b", "white"],
+            check=True,
+            capture_output=True,
+        )
         print(f"PNG saved to: {png_path}")
-    except Exception as e:
-        print(f"PNG generation skipped (install graphviz for PNG): {e}")
-
-    print("\nMermaid content:")
-    print(mermaid_text)
+    except FileNotFoundError:
+        print("mmdc not found. Install it with:")
+        print("  npm install -g @mermaid-js/mermaid-cli")
+    except subprocess.CalledProcessError as e:
+        print(f"Error generating PNG: {e.stderr.decode()}")
 
 
 if __name__ == "__main__":
