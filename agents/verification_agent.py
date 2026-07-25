@@ -1,6 +1,6 @@
 from langchain_openrouter import ChatOpenRouter
 from typing import Dict, List
-from langchain.schema import Document
+from langchain_core.documents import Document
 from config.settings import settings
 from .models import VerificationReport
 
