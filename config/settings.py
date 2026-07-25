@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str
 
     # Model settings
-    CHAT_MODEL: str = "inclusionai/ling-3.0-flash:free"
+    CHAT_MODEL: str = "deepseek/deepseek-chat"
     EMBEDDING_MODEL: str = "qwen/qwen3-embedding-8b"
 
     # Optional settings with defaults

@@ -2,6 +2,10 @@ import gradio as gr
 import hashlib
 from typing import List, Dict
 import os
+from dotenv import load_dotenv
+
+# Load environment variables before importing settings
+load_dotenv()
 
 from document_processor.file_handler import DocumentProcessor
 from retriever.builder import RetrieverBuilder
@@ -12,13 +16,9 @@ from utils.logging import logger
 # 1) Define some example data 
 #    (i.e. question + paths to documents relevant to that question).
 EXAMPLES = {
-    "Google 2024 Environmental Report": {
-        "question": "Retrieve the data center PUE efficiency values in Singapore 2nd facility in 2019 and 2022. Also retrieve regional average CFE in Asia pacific in 2023",
-        "file_paths": ["examples/google-2024-environmental-report.pdf"]  
-    },
-    "DeepSeek-R1 Technical Report": {
-        "question": "Summarize DeepSeek-R1 model's performance evaluation on all coding tasks against OpenAI o1-mini model",
-        "file_paths": ["examples/DeepSeek Technical Report.pdf"]
+    "Certificado CENLEX": {
+        "question": "What is the expiration date of the certificate issued by CENLEX?",
+        "file_paths": ["examples/certificado.pdf"]  
     }
 }
 
@@ -82,11 +82,8 @@ def main():
     """
 
     with gr.Blocks(theme=gr.themes.Citrus(), title="DocChat ", css=css, js=js) as demo:
-        gr.Markdown("## DocChat: powered by Docling and LangGraph", elem_classes="subtitle")
-        gr.Markdown("# How it works:", elem_classes="title")
-        gr.Markdown("Upload your document(s), enter your query then hit Submit", elem_classes="text")
-        gr.Markdown("Or you can select one of the examples from the drop-down menu, select Load Example then hit Submit 📝", elem_classes="text")
-        gr.Markdown("**Note:** DocChat only accepts documents in these formats: '.pdf', '.docx', '.txt', '.md'", elem_classes="text")
+        gr.Markdown("## DocChat: RAG Multiagente con Docling y LangGraph", elem_classes="subtitle")
+        gr.Markdown("**Nota:** Sólo se aceptan los siguientes formatos: '.pdf', '.docx', '.txt', '.md'", elem_classes="text")
 
         # 2) Maintain the session state for retrieving doc changes
         session_state = gr.State({
@@ -97,15 +94,6 @@ def main():
         # 3) Layout 
         with gr.Row():
             with gr.Column():
-                # Section for Examples
-                gr.Markdown("### Example")
-                example_dropdown = gr.Dropdown(
-                    label="Select an Example",
-                    choices=list(EXAMPLES.keys()),
-                    value=None,  # initially unselected
-                )
-                load_example_btn = gr.Button("Load Example 🛠️")
-
                 # Standard input components
                 files = gr.Files(label="Upload Documents", file_types=constants.ALLOWED_TYPES)
                 question = gr.Textbox(label="Question", lines=3)
@@ -116,38 +104,6 @@ def main():
                 answer_output = gr.Textbox(label="Answer", interactive=False)
                 verification_output = gr.Textbox(label="Verification Report")
 
-        # 4) Helper function to load example into the UI
-        def load_example(example_key: str):
-            """
-            Given a key like 'Example 1', 
-            read the relevant docs from disk and return
-            them as file-like objects, plus the example question.
-            """
-            if not example_key or example_key not in EXAMPLES:
-                return [], ""  # blank if not found
-
-            ex_data = EXAMPLES[example_key]
-            question = ex_data["question"]
-            file_paths = ex_data["file_paths"]
-
-            # Prepare the file list to return. We read them from disk to
-            # give Gradio something it can handle as "uploaded" files.
-            loaded_files = []
-            for path in file_paths:
-                if os.path.exists(path):
-                    # Gradio can accept a path directly, or a file-like object
-                    loaded_files.append(path)
-                else:
-                    logger.warning(f"File not found: {path}")
-
-            # The function can return lists matching the outputs we define below
-            return loaded_files, question
-
-        load_example_btn.click(
-            fn=load_example,
-            inputs=[example_dropdown],
-            outputs=[files, question]
-        )
 
         # 5) Standard flow for question submission
         def process_question(question_text: str, uploaded_files: List, state: Dict):
