@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict
 from .research_agent import ResearchAgent
 from .verification_agent import VerificationAgent
-from .relevance_checker import RelevanceChecker
+from .relevance_checker import RelevanceChecker, RelevanceClassification
 from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
 import logging
@@ -62,17 +62,13 @@ class AgentWorkflow:
             k=20
         )
 
-        if classification == "CAN_ANSWER":
-            # We have enough info to proceed
+        if classification == RelevanceClassification.CAN_ANSWER:
             return {"is_relevant": True}
 
-        elif classification == "PARTIAL":
-            # There's partial coverage, but we can still proceed
-            return {
-                "is_relevant": True
-            }
+        elif classification == RelevanceClassification.PARTIAL:
+            return {"is_relevant": True}
 
-        else:  # classification == "NO_MATCH"
+        else:  # NO_MATCH
             return {
                 "is_relevant": False,
                 "draft_answer": "This question isn't related (or there's no data) for your query. Please ask another question relevant to the uploaded document(s)."

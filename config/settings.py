@@ -4,7 +4,11 @@ import os
 
 class Settings(BaseSettings):
     # Required settings
-    OPENAI_API_KEY: str
+    OPENROUTER_API_KEY: str
+
+    # Model settings
+    CHAT_MODEL: str = "inclusionai/ling-3.0-flash:free"
+    EMBEDDING_MODEL: str = "qwen/qwen3-embedding-8b"
 
     # Optional settings with defaults
     MAX_FILE_SIZE: int = MAX_FILE_SIZE
@@ -22,7 +26,7 @@ class Settings(BaseSettings):
     # Logging settings
     LOG_LEVEL: str = "INFO"
 
-    # New cache settings with type annotations
+    # Cache settings
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7
 

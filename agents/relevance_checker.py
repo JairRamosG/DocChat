@@ -1,33 +1,36 @@
-from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai import Credentials, APIClient
+from enum import Enum
+from langchain_openrouter import ChatOpenRouter
 from config.settings import settings
-import re
 import logging
 
 logger = logging.getLogger(__name__)
 
-credentials = Credentials(
-                url = "https://us-south.ml.cloud.ibm.com",
-                )
-client = APIClient(credentials)
+
+class RelevanceClassification(str, Enum):
+    """Classification of document relevance to a question."""
+    CAN_ANSWER = "CAN_ANSWER"
+    PARTIAL = "PARTIAL"
+    NO_MATCH = "NO_MATCH"
+
 
 class RelevanceChecker:
     def __init__(self):
-        # Initialize the WatsonX ModelInference
-        self.model = ModelInference(
-            model_id="ibm/granite-4-h-small",
-            credentials=credentials,
-            project_id="skills-network",
-            params={"temperature": 0, "max_tokens": 10},
+        """
+        Initialize the relevance checker with OpenRouter chat model.
+        """
+        self.model = ChatOpenRouter(
+            model=settings.CHAT_MODEL,
+            temperature=0,
+            max_tokens=10,
         )
 
-    def check(self, question: str, retriever, k=3) -> str:
+    def check(self, question: str, retriever, k=3) -> RelevanceClassification:
         """
         1. Retrieve the top-k document chunks from the global retriever.
         2. Combine them into a single text string.
         3. Pass that text + question to the LLM for classification.
 
-        Returns: "CAN_ANSWER", "PARTIAL", or "NO_MATCH".
+        Returns: RelevanceClassification enum value.
         """
 
         logger.debug(f"RelevanceChecker.check called with question='{question}' and k={k}")
@@ -36,7 +39,7 @@ class RelevanceChecker:
         top_docs = retriever.invoke(question)
         if not top_docs:
             logger.debug("No documents returned from retriever.invoke(). Classifying as NO_MATCH.")
-            return "NO_MATCH"
+            return RelevanceClassification.NO_MATCH
 
         # Combine the top k chunk texts into one string
         document_content = "\n\n".join(doc.page_content for doc in top_docs[:k])
@@ -65,35 +68,26 @@ class RelevanceChecker:
 
         # Call the LLM
         try:
-            response = self.model.chat(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt  # Changed from list to string
-                    }
-                ]
-            )
+            response = self.model.invoke(prompt)
         except Exception as e:
             logger.error(f"Error during model inference: {e}")
-            return "NO_MATCH"
+            return RelevanceClassification.NO_MATCH
 
         # Extract the content from the response
         try:
-            llm_response = response['choices'][0]['message']['content'].strip().upper()
+            llm_response = response.content.strip().upper()
             logger.debug(f"LLM response: {llm_response}")
-        except (IndexError, KeyError) as e:
+        except AttributeError as e:
             logger.error(f"Unexpected response structure: {e}")
-            return "NO_MATCH"
+            return RelevanceClassification.NO_MATCH
 
         print(f"Checker response: {llm_response}")
 
-        # Validate the response
-        valid_labels = {"CAN_ANSWER", "PARTIAL", "NO_MATCH"}
-        if llm_response not in valid_labels:
+        # Validate and return as enum
+        try:
+            classification = RelevanceClassification(llm_response)
+            logger.debug(f"Classification recognized as '{classification.value}'.")
+            return classification
+        except ValueError:
             logger.debug("LLM did not respond with a valid label. Forcing 'NO_MATCH'.")
-            classification = "NO_MATCH"
-        else:
-            logger.debug(f"Classification recognized as '{llm_response}'.")
-            classification = llm_response
-
-        return classification
+            return RelevanceClassification.NO_MATCH

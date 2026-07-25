@@ -1,0 +1,57 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Virtual Environments ===
+.venv/
+venv/
+env/
+ENV/
+
+# === Environment Variables (API Keys) ===
+.env
+.env.local
+.env.production
+.env.*.local
+
+# === DocChat Specific ===
+chroma_db/
+document_cache/
+app.log
+*.pkl
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Logs ===
+*.log
+logs/
+
+# === Jupyter Notebooks ===
+.ipynb_checkpoints/
+
+# === Testing ===
+.pytest_cache/
+.coverage
+htmlcov/
+
+# === Distribution ===
+*.tar.gz
+*.whl
