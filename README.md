@@ -34,7 +34,23 @@ El sistema utiliza tres agentes especializados que trabajan en secuencia:
 
 ## Arquitectura
 
-![Arquitectura del sistema](diagrama/diagram.png)
+```
+┌─────────────────────────────────────────────────┐
+│  Interfaz Gradio (app.py)                       │
+└──────────────────────┬──────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────┐
+│  Flujo LangGraph                                │
+│  ┌─────────────┐  ┌───────────┐  ┌───────────┐ │
+│  │ Relevancia  │→ │Investigar │→ │ Verificar │ │
+│  └─────────────┘  └───────────┘  └───────────┘ │
+└──────────────────────┬──────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────┐
+│  Recuperador Híbrido (BM25 + ChromaDB)          │
+│  Embeddings: qwen/qwen3-embedding-8b           │
+└─────────────────────────────────────────────────┘
+```
 
 ## Stack Tecnológico
 
