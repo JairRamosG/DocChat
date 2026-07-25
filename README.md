@@ -1,6 +1,6 @@
 # DocChat
 
-> Multi-agent RAG system for document analysis using LangGraph and OpenRouter.
+> Sistema multi-agente RAG para análisis de documentos usando LangGraph y OpenRouter.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-412991?style=for-the-badge&logo=langchain&logoColor=white)
@@ -11,145 +11,124 @@
 
 ---
 
-## Overview
+## Descripción
 
-DocChat is a **multi-agent Retrieval Augmented Generation (RAG)** system that allows you to chat with your documents. Upload a PDF, DOCX, TXT, or MD file, ask a question, and get an AI-generated answer backed by the document content.
+DocChat es un sistema **multi-agente de Retrieval Augmented Generation (RAG)** que permite conversar con tus documentos. Sube un archivo PDF, DOCX, TXT o MD, haz una pregunta, y obtén una respuesta generada por IA respaldada por el contenido del documento.
 
-The system uses three specialized agents working in sequence:
+El sistema utiliza tres agentes especializados que trabajan en secuencia:
 
-1. **Relevance Checker** — Determines if the document can answer the question
-2. **Research Agent** — Generates a draft answer from relevant document chunks
-3. **Verification Agent** — Validates the answer against the source documents
+1. **Verificador de Relevancia** — Determina si el documento puede responder la pregunta
+2. **Agente de Investigación** — Genera una respuesta a partir de los fragmentos relevantes
+3. **Agente de Verificación** — Valida la respuesta contra el contenido fuente
 
-## Workflow
+## Flujo de Trabajo
 
-![Agent Workflow](diagrama/workflow.png)
+![Flujo de agentes](diagrama/diagram.png)
 
-| Step | Agent | Description |
-|------|-------|-------------|
-| 1 | **Relevance Checker** | Classifies the document-question pair as `CAN_ANSWER`, `PARTIAL`, or `NO_MATCH` |
-| 2 | **Research Agent** | Retrieves relevant chunks and generates a factual answer |
-| 3 | **Verification Agent** | Cross-checks the answer for factual support, contradictions, and relevance |
-| 4 | **Re-research** | If verification fails, the workflow loops back to step 2 |
+| Paso | Agente | Descripción |
+|------|--------|-------------|
+| 1 | **Verificador de Relevancia** | Clasifica el par documento-pregunta como `CAN_ANSWER`, `PARTIAL` o `NO_MATCH` |
+| 2 | **Agente de Investigación** | Recupera fragmentos relevantes y genera una respuesta factual |
+| 3 | **Agente de Verificación** | Cruza la respuesta buscando soporte factual, contradicciones y relevancia |
+| 4 | **Re-investigación** | Si la verificación falla, el flujo vuelve al paso 2 |
 
-## Architecture
+## Arquitectura
 
-```
-┌─────────────────────────────────────────────────┐
-│  Gradio UI (app.py)                            │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│  LangGraph Workflow                             │
-│  ┌─────────────┐  ┌───────────┐  ┌───────────┐ │
-│  │ Relevance   │→ │ Research  │→ │ Verifier  │ │
-│  │ Checker     │  │ Agent     │  │ Agent     │ │
-│  └─────────────┘  └───────────┘  └───────────┘ │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│  Hybrid Retriever (BM25 + ChromaDB)             │
-│  Embeddings: qwen/qwen3-embedding-8b           │
-└─────────────────────────────────────────────────┘
-```
+![Arquitectura del sistema](diagrama/diagram.png)
 
-## Tech Stack
+## Stack Tecnológico
 
-| Component | Technology |
-|-----------|------------|
-| LLM | DeepSeek v3 (via OpenRouter) |
-| Embeddings | Qwen3 Embedding 8B (via OpenRouter) |
+| Componente | Tecnología |
+|------------|------------|
+| LLM | DeepSeek v3 (vía OpenRouter) |
+| Embeddings | Qwen3 Embedding 8B (vía OpenRouter) |
 | Vector Store | ChromaDB (local) |
-| Retrieval | Hybrid BM25 + Semantic Search |
-| Document Processing | Docling |
-| Agent Framework | LangGraph |
-| UI | Gradio |
-| Structured Output | Pydantic |
+| Recuperación | Búsqueda híbrida BM25 + Semántica |
+| Procesamiento de Documentos | Docling |
+| Framework de Agentes | LangGraph |
+| Interfaz | Gradio |
+| Salida Estructurada | Pydantic |
 
-## Project Structure
+## Estructura del Proyecto
 
 ```
 DocChat/
-├── app.py                          # Gradio UI and entry point
-├── generate_diagram.py             # Workflow diagram generator
+├── app.py                          # Interfaz Gradio y punto de entrada
+├── generate_diagram.py             # Generador de diagrama del flujo
 ├── requirements.txt
-├── .env                            # API keys (not committed)
+├── .env                            # API keys (no se sube al repositorio)
 ├── agents/
-│   ├── models.py                   # Pydantic models (VerificationReport)
-│   ├── relevance_checker.py        # Document-question relevance classifier
-│   ├── research_agent.py           # Answer generation agent
-│   ├── verification_agent.py       # Answer validation agent
-│   └── workflow.py                 # LangGraph workflow orchestration
+│   ├── models.py                   # Modelos Pydantic (VerificationReport)
+│   ├── relevance_checker.py        # Clasificador de relevancia
+│   ├── research_agent.py           # Agente de generación de respuestas
+│   ├── verification_agent.py       # Agente de validación de respuestas
+│   └── workflow.py                 # Orquestación del flujo LangGraph
 ├── config/
-│   ├── constants.py                # App constants
-│   └── settings.py                 # Environment-based configuration
+│   ├── constants.py                # Constantes de la aplicación
+│   └── settings.py                 # Configuración basada en variables de entorno
 ├── document_processor/
-│   └── file_handler.py             # Document parsing and chunking
+│   └── file_handler.py             # Parseo y fragmentación de documentos
 ├── retriever/
-│   └── builder.py                  # Hybrid retriever construction
+│   └── builder.py                  # Construcción del recuperador híbrido
 ├── diagrama/
-│   └── workflow.mmd                # Mermaid workflow diagram
+│   └── diagram.png                 # Diagrama del flujo de agentes
 └── utils/
-    └── logging.py                  # Loguru configuration
+    └── logging.py                  # Configuración de Loguru
 ```
 
-## Getting Started
+## Inicio Rápido
 
-### Prerequisites
+### Requisitos Previos
 
 - Python 3.11+
-- An [OpenRouter API key](https://openrouter.ai/keys)
+- Una [API key de OpenRouter](https://openrouter.ai/keys)
 
-### Installation
+### Instalación
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/DocChat.git
+# Clonar el repositorio
+git clone https://github.com/tu-usuario/DocChat.git
 cd DocChat
 
-# Create virtual environment
+# Crear entorno virtual
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 # .venv\Scripts\activate   # Windows
 
-# Install dependencies
+# Instalar dependencias
 pip install -r requirements.txt
 
-# Configure environment variables
-echo 'OPENROUTER_API_KEY=your-api-key-here' > .env
+# Configurar variables de entorno
+echo 'OPENROUTER_API_KEY=tu-api-key-aquí' > .env
 ```
 
-### Running
+### Ejecución
 
 ```bash
 python app.py
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
+Abrír [http://127.0.0.1:5000](http://127.0.0.1:5000) en tu navegador.
 
-## Configuration
+## Configuración
 
-All settings are in `config/settings.py` and can be overridden via `.env`:
+Todas las opciones están en `config/settings.py` y pueden sobreescribirse desde `.env`:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENROUTER_API_KEY` | — | Required. Your OpenRouter API key |
-| `CHAT_MODEL` | `deepseek/deepseek-chat` | LLM model for agents |
-| `EMBEDDING_MODEL` | `qwen/qwen3-embedding-8b` | Embedding model |
-| `VECTOR_SEARCH_K` | `10` | Number of chunks for vector search |
-| `CACHE_EXPIRE_DAYS` | `7` | Document cache TTL |
+| Variable | Valor por defecto | Descripción |
+|----------|-------------------|-------------|
+| `OPENROUTER_API_KEY` | — | Obligatoria. Tu API key de OpenRouter |
+| `CHAT_MODEL` | `deepseek/deepseek-chat` | Modelo LLM para los agentes |
+| `EMBEDDING_MODEL` | `qwen/qwen3-embedding-8b` | Modelo de embeddings |
+| `VECTOR_SEARCH_K` | `10` | Cantidad de fragmentos para búsqueda vectorial |
+| `CACHE_EXPIRE_DAYS` | `7` | TTL del caché de documentos |
 
-## Supported Formats
+## Formatos Soportados
 
 - `.pdf`
 - `.docx`
 - `.txt`
 - `.md`
 
-## Cost
+## Costo
 
-Using DeepSeek via OpenRouter, the cost per query is approximately **$0.0001 USD**.
-
-## License
-
-MIT
+Usando DeepSeek vía OpenRouter, el costo por consulta es de aproximadamente **$0.0001 USD**.
