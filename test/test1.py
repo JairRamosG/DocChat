@@ -73,16 +73,16 @@ def main():
     ocr_path = "test/ocr_test.pdf"
     scanned_pdf_path = "test/sample.png"
     
-    print("\n🔍 Running Docling Extraction for OCR...")
+    print("\nRunning Docling Extraction for OCR...")
     docling_docs = parse_with_docling(ocr_path)
 
-    print("\n🔍 Running LangChain Extraction for OCR...")
+    print("\nRunning LangChain Extraction for OCR...")
     langchain_text = parse_with_langchain(ocr_path)
 
-    print("\n🔍 Running Docling Extraction for scanned PDF...")
+    print("\nRunning Docling Extraction for scanned PDF...")
     docling_docs = parse_with_docling(scanned_pdf_path)
 
-    print("\n🔍 Running LangChain Extraction for scanned PDF...")
+    print("\nRunning LangChain Extraction for scanned PDF...")
     langchain_text = parse_with_langchain(scanned_pdf_path)
 
 if __name__ == "__main__":
