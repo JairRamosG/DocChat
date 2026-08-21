@@ -1,12 +1,12 @@
-# Guía de Producción: DocChat
+# Notas de Producción: DocChat
 
-## Propósito
+## Mi Objetivo
 
-Esta guía documenta el camino completo para llevar DocChat de una aplicación local a un sistema robusto, testeado y desplegado en producción. Cada bloque es un módulo de aprendizaje independiente que se implementará secuencialmente.
+Aprender a llevar DocChat de una aplicación local a un sistema robusto, testeado y desplegado en producción. Cada bloque es un módulo de aprendizaje que implementaré secuencialmente, documentando lo que aprendo para futuro referencia.
 
 ---
 
-## Arquitectura Objetivo
+## Arquitectura que voy a construir
 
 ```
 GitHub Actions (CI/CD)
@@ -22,7 +22,9 @@ Caddy (HTTPS + proxy reverso)
 Internet → Usuario
 ```
 
-**Decisión técnica:** Se utiliza ChromaDB como vector store en lugar de PostgreSQL. Esto simplifica la infraestructura pero implica consideraciones específicas sobre persistencia y escalabilidad que se documentan en cada bloque.
+**Decisión técnica:** Uso ChromaDB como vector store en lugar de PostgreSQL. Esto simplifica la infraestructura pero implica consideraciones específicas sobre persistencia y escalabilidad que documentaré en cada bloque.
+
+**Herramienta de testing elegida:** pytest. Es el estándar en el ecosistema Python, flexible, con plugins útiles y buena integración con Docker Compose para tests de integración.
 
 ---
 
@@ -53,11 +55,11 @@ docker run --rm -p 5000:5000 -v docchat-data:/app/data docchat:latest
 # App funcionando en localhost:5000 con persistencia
 ```
 
-**Preguntas para entrevista:**
-- ¿Cuál es la diferencia entre una imagen y un container?
-- ¿Para qué sirven los multi-stage builds?
-- ¿Cómo persistes datos cuando el container se destruye?
-- ¿Qué es el build cache y cómo afecta el tiempo de build?
+**Conceptos que debo dominar:**
+- Diferencia entre imagen y container
+- Para qué sirven los multi-stage builds
+- Cómo persistir datos cuando el container se destruye
+- Qué es el build cache y cómo afecta el tiempo de build
 
 ---
 
@@ -88,17 +90,19 @@ docker compose up --build
 # App accesible en localhost:5000
 ```
 
-**Preguntas para entrevista:**
-- ¿Docker Compose vs Kubernetes? ¿Cuándo usar cada uno?
-- ¿Qué es un health check y por qué es importante?
-- ¿Cómo manejas servicios que dependen de otros?
-- ¿Qué diferencia hay entre `docker run` y `docker compose up`?
+**Conceptos que debo dominar:**
+- Diferencia entre Docker Compose y Kubernetes
+- Qué es un health check y por qué es importante
+- Cómo manejar servicios que dependen de otros
+- Diferencia entre `docker run` y `docker compose up`
 
 ---
 
-### Bloque 3: Testing (Unit, Integration, E2E)
+### Bloque 3: Testing con pytest
 
 **Objetivo:** Crear una pirámide de tests que garantice que los cambios no rompen funcionalidad existente.
+
+**Herramienta elegida:** pytest
 
 **Conceptos clave:**
 - Pirámide de testing: unit → integration → E2E
@@ -108,6 +112,7 @@ docker compose up --build
 - Mocking: cuándo mockear vs cuándo testear real
 - Test fixtures: datos de prueba reproducibles
 - Cobertura de código: métricas útiles vs métricas vanidosas
+- Markers de pytest: `@pytest.mark.integration`, `@pytest.mark.slow`
 
 **Aplicación a DocChat:**
 - **Unit tests:** testear funciones de `DocumentProcessor`, parsing, chunking
@@ -116,11 +121,26 @@ docker compose up --build
 - **Tests del retriever:** verificar que BM25 + ChromaDB funcionan juntos
 - **Tests de agentes:** verificar que RelevanceChecker, ResearchAgent, VerificationAgent responden correctamente
 
-**Herramientas:**
-- `pytest` para unit y integration tests
-- `pytest-asyncio` si hay operaciones asíncronas
-- `playwright` o `selenium` para E2E tests contra la UI de Gradio
-- `pytest-cobertura` para métricas de cobertura
+**Estructura de tests:**
+```
+tests/
+├── unit/
+│   ├── test_document_processor.py
+│   ├── test_retriever.py
+│   └── test_agents.py
+├── integration/
+│   ├── test_pipeline.py
+│   └── test_retriever_chroma.py
+├── e2e/
+│   └── test_full_flow.py
+├── conftest.py          # Fixtures compartidos
+└── pytest.ini           # Configuración
+```
+
+**Plugins de pytest que voy a usar:**
+- `pytest-asyncio` para operaciones asíncronas
+- `pytest-cov` para cobertura de código
+- `pytest-docker` para tests contra Docker Compose
 
 **Resultado esperado:**
 ```bash
@@ -137,11 +157,11 @@ pytest tests/e2e/ -v
 pytest --cov=agents --cov=retriever --cov=document_processor tests/
 ```
 
-**Preguntas para entrevista:**
-- ¿Cuándo usar mocks vs testing real?
-- ¿Qué es un test de integración vs un test E2E?
-- ¿Cómo testear un pipeline de IA que depende de un LLM externo?
-- ¿Qué métricas de testing son relevantes para una entrevista?
+**Conceptos que debo dominar:**
+- Cuándo usar mocks vs testing real
+- Diferencia entre test de integración y test E2E
+- Cómo testear un pipeline de IA que depende de un LLM externo
+- Qué métricas de testing son realmente útiles
 
 ---
 
@@ -180,11 +200,11 @@ aws cloudformation create-stack \
 # App accesible en https://tu-dominio.com
 ```
 
-**Preguntas para entrevista:**
-- ¿EC2 vs ECS vs Lambda? ¿Cuándo usar cada uno?
-- ¿Qué es Infrastructure as Code y por qué usarlo?
-- ¿Cómo manejas secrets (API keys) en producción?
-- ¿Cómo estimas costos de AWS?
+**Conceptos que debo dominar:**
+- Cuándo usar EC2 vs ECS vs Lambda
+- Qué es Infrastructure as Code y por qué usarlo
+- Cómo manejar secrets (API keys) en producción
+- Cómo estimar costos de AWS
 
 ---
 
@@ -192,7 +212,7 @@ aws cloudformation create-stack \
 
 **Objetivo:** Automatizar testing y deployment cada vez que se hace push a `main`.
 
-**Conceptos workflows:**
+**Conceptos clave:**
 - Continuous Integration (CI): ejecutar tests automáticamente
 - Continuous Deployment (CD): desplegar automáticamente si los tests pasan
 - GitHub Actions: triggers, jobs, steps, secrets
@@ -228,7 +248,7 @@ jobs:
     needs: test
     steps:
       - Build Docker image
-      - Push a ECR/GHCR
+      - Push a GHCR
   
   deploy:
     needs: build
@@ -245,25 +265,25 @@ jobs:
 # Health check verifica que la app está funcionando
 ```
 
-**Preguntas para entrevista:**
-- ¿CI vs CD? ¿Cuál es la diferencia?
-- ¿Qué es un workflow en GitHub Actions?
-- ¿Cómo manejas secrets en CI/CD?
-- ¿Qué es OIDC y por qué es mejor que secrets estáticos?
-- ¿Cómo implementas rollback si el deploy falla?
+**Conceptos que debo dominar:**
+- Diferencia entre CI y CD
+- Qué es un workflow en GitHub Actions
+- Cómo manejar secrets en CI/CD
+- Qué es OIDC y por qué es mejor que secrets estáticos
+- Cómo implementar rollback si el deploy falla
 
 ---
 
-## Decisiones Técnicas Pendientes
+## Decisiones Técnicas
 
-| Decisión | Opciones | Recomendación |
-|----------|----------|---------------|
-| Vector store | ChromaDB vs PostgreSQL+pgvector | ChromaDB (simplifica infra) |
-| Cloud provider | AWS vs GCP vs Azure | AWS (más documentación, free tier) |
-| Container registry | Docker Hub vs GHCR vs ECR | GHCR (gratis con GitHub Actions) |
-| IaC tool | CloudFormation vs Terraform | CloudFormation (nativo AWS) |
-| HTTPS | Caddy vs Nginx + Let's Encrypt | Caddy (automático, simpler) |
-| Test framework | pytest + playwright | pytest + playwright |
+| Decisión | Opciones | Mi elección | Razón |
+|----------|----------|-------------|-------|
+| Vector store | ChromaDB vs PostgreSQL+pgvector | **ChromaDB** | Simplifica la infraestructura |
+| Test framework | pytest vs unittest | **pytest** | Estándar en Python, plugins útiles |
+| Cloud provider | AWS vs GCP vs Azure | **AWS** | Más documentación, free tier |
+| Container registry | Docker Hub vs GHCR vs ECR | **GHCR** | Gratis con GitHub Actions |
+| IaC tool | CloudFormation vs Terraform | **CloudFormation** | Nativo AWS, sin dependencias |
+| HTTPS | Caddy vs Nginx + Let's Encrypt | **Caddy** | Automático, más simple |
 
 ---
 
@@ -276,7 +296,7 @@ Bloque 1: Docker (1-2 días)
 Bloque 2: Docker Compose (1 día)
     └→ docker-compose.yaml con app + chroma
 
-Bloque 3: Tests (2-3 días)
+Bloque 3: Tests con pytest (2-3 días)
     └→ Unit + integration + E2E
 
 Bloque 4: AWS (2-3 días)
@@ -304,7 +324,7 @@ Bloque 5: CI/CD (1-2 días)
 
 ## Próximos Pasos
 
-Una vez que esta guía esté aprobada:
+Una vez que esta guía esté lista:
 
 1. Crear guía de estudio individual para **Bloque 1: Docker**
 2. Implementar Dockerfile para DocChat
