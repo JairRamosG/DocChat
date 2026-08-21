@@ -1,3 +1,12 @@
+# === SDD / Skills ===
+.atl/
+
+# === Gradio ===
+.gradio/
+
+# === Misc ===
+=0.3.0
+
 # === Python ===
 __pycache__/
 *.py[cod]
