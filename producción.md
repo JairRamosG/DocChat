@@ -1,8 +1,6 @@
 # Notas de Producción: DocChat
 
-## Mi Objetivo
-
-Aprender a llevar DocChat de una aplicación local a un sistema robusto, testeado y desplegado en producción. Cada bloque es un módulo de aprendizaje que implementaré secuencialmente, documentando lo que aprendo para futuro referencia.
+Llevar DocChat de una aplicación local a un sistema robusto, testeado y desplegado en producción. Cada bloque es un módulo de aprendizaje que implementaré secuencialmente, documentando lo que aprendo para futuro referencia.
 
 ---
 
