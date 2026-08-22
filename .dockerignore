@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+docker-compose*.yml
+
+# Docs (no necesarios en la imagen)
+*.md
+diagrama/
+test/
+
+# SDD / Skills
+.atl/
+
+# Gradio
+.gradio/
+
+# Misc
+=0.3.0
+.DS_Store
+Thumbs.db

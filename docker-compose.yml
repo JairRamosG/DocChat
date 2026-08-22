@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+    volumes:
+      - docchat-cache:/app/document_cache
+    depends_on:
+      chroma:
+        condition: service_healthy
+    networks:
+      - docchat-network
+    restart: unless-stopped
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - docchat-chroma:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docchat-network
+    restart: unless-stopped
+
+volumes:
+  docchat-chroma:
+  docchat-cache:
+
+networks:
+  docchat-network:
+    driver: bridge
