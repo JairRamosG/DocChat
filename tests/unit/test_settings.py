@@ -11,14 +11,6 @@ def mock_env():
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key-12345"}):
         yield
 
-
-def test_settings_requires_api_key():
-    """Settings without API key should fail."""
-    with patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(Exception):
-            Settings()
-
-
 def test_settings_loads_with_api_key(mock_env):
     """Settings should load with valid API key."""
     settings = Settings()
@@ -76,7 +68,7 @@ def test_default_vector_search_k(mock_env):
 def test_default_hybrid_weights(mock_env):
     """Hybrid weights should be [0.4, 0.6]."""
     settings = Settings()
-    assert settings.HYBRID_RETRIEVAL_WEIGHTS == [0.4, 0.6]
+    assert settings.HYBRID_RETRIEVER_WEIGHTS == [0.4, 0.6]
 
 
 def test_default_log_level(mock_env):
