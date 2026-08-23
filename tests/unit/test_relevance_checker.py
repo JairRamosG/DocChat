@@ -1,7 +1,15 @@
 """Tests for agents/relevance_checker.py"""
+import os
 import pytest
 from unittest.mock import patch, MagicMock
 from agents.relevance_checker import RelevanceChecker, RelevanceClassification
+
+
+@pytest.fixture(autouse=True)
+def mock_openrouter_key():
+    """Mockear OPENROUTER_API_KEY para todos los tests."""
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key-12345"}):
+        yield
 
 
 def test_relevance_classification_enum():

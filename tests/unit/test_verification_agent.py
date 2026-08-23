@@ -1,8 +1,16 @@
 """Tests for agents/verification_agent.py"""
+import os
 import pytest
 from unittest.mock import patch, MagicMock
 from agents.verification_agent import VerificationAgent
 from agents.models import VerificationReport
+
+
+@pytest.fixture(autouse=True)
+def mock_openrouter_key():
+    """Mockear OPENROUTER_API_KEY para todos los tests."""
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key-12345"}):
+        yield
 
 
 def test_verification_agent_init():
