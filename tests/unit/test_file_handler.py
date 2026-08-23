@@ -8,6 +8,13 @@ import pytest
 from document_processor.file_handler import DocumentProcessor
 
 
+class RealChunk:
+    """Mock chunk object that can be pickled."""
+    def __init__(self, content):
+        self.page_content = content
+        self.metadata = {}
+
+
 # ============================================
 # TESTS YA IMPLEMENTADOS (ejemplos)
 # ============================================
@@ -62,14 +69,19 @@ def test_validate_files_under_limit(processor, sample_file):
     processor.validate_files([file_obj])
 
 
-def test_validate_files_over_limit(processor, sample_file):
+def test_validate_files_over_limit(processor, tmp_path):
     """validate_files debe fallar si excede el límite total."""
-    with patch("document_processor.file_handler.constants") as mock_constants:
-        mock_constants.MAX_TOTAL_SIZE = 1  # 1 byte - muy pequeño
-        file_obj = MagicMock()
-        file_obj.name = sample_file
-        with pytest.raises(ValueError, match="exceeds"):
-            processor.validate_files([file_obj])
+    import config.constants as const
+    
+    # Crear un archivo más grande que MAX_TOTAL_SIZE
+    big_file = tmp_path / "big_file.txt"
+    big_file.write_bytes(b"x" * (const.MAX_TOTAL_SIZE + 1))
+    
+    file_obj = MagicMock()
+    file_obj.name = str(big_file)
+    
+    with pytest.raises(ValueError, match="exceeds"):
+        processor.validate_files([file_obj])
 
 
 def test_is_cache_valid_returns_false_when_not_exists(processor):
@@ -198,9 +210,7 @@ def test_process_deduplicates_chunks(processor, tmp_path):
     
     with patch.object(processor, "_process_file") as mock_process:
         # Retornar el mismo chunk para ambos archivos
-        mock_chunk = MagicMock()
-        mock_chunk.page_content = "Same content"
-        mock_process.return_value = [mock_chunk]
+        mock_process.return_value = [RealChunk("Same content")]
         
         # Act
         result = processor.process([file_obj1, file_obj2])
@@ -240,10 +250,12 @@ def test_process_loads_from_cache(processor, tmp_path):
     file_obj = MagicMock()
     file_obj.name = str(test_file)
     
+    cached_chunk = RealChunk("cached_chunk")
+    
     # Pre-cargar el cache
     file_hash = processor._generate_hash(test_file.read_bytes())
     cache_path = processor.cache_dir / f"{file_hash}.pkl"
-    processor._save_to_cache(["cached_chunk"], cache_path)
+    processor._save_to_cache([cached_chunk], cache_path)
     
     with patch.object(processor, "_process_file") as mock_process:
         # Act
@@ -251,4 +263,5 @@ def test_process_loads_from_cache(processor, tmp_path):
         
         # Assert - NO debe llamar a _process_file porque usa cache
         mock_process.assert_not_called()
-        assert result == ["cached_chunk"]
+        assert len(result) == 1
+        assert result[0].page_content == "cached_chunk"
