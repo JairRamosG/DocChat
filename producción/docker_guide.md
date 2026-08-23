@@ -366,9 +366,169 @@ HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
 7. En otro lugar: docker build + docker run = funciona igual
 ```
 
-## Siguiente paso
+## Docker Compose
 
-Una vez que entiendas esto, pasamos a:
-- **Docker Compose**: Orquestar app + ChromaDB
-- **Tests**: Verificar que el container funciona correctamente
-- **CI/CD**: Automatizar el build cada vez que haces push
+### ¿Qué es Docker Compose?
+
+Docker Compose es la misma idea que `docker run`, pero en un **único archivo**. En vez de escribir varios comandos, defines todo en `docker-compose.yml` y ejecutas un solo comando.
+
+### Ejemplo simple
+
+**Sin Compose (varios comandos):**
+```bash
+docker network create docchat-net
+docker run -d --name chroma --network docchat-net -p 8000:8000 chromadb/chroma:latest
+docker run -d --name app --network docchat-net -p 5000:5000 -e CHROMA_HOST=chroma imagen-docchat:v1.0
+```
+
+**Con Compose (un archivo + un comando):**
+```yaml
+# docker-compose.yml
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - CHROMA_HOST=chroma
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+```
+
+```bash
+docker compose up
+```
+
+### Comandos esenciales
+
+```bash
+# Levantar todo (background)
+docker compose up -d
+
+# Ver estado
+docker compose ps
+
+# Ver logs (tiempo real)
+docker compose logs -f
+
+# Parar (sin borrar datos)
+docker compose down
+
+# Parar y borrar TODO (incluyendo volumes)
+docker compose down -v
+
+# Reconstruir si cambió el Dockerfile
+docker compose up --build
+```
+
+### Ejemplo para DocChat
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    build: .
+    ports:
+      - "5001:5000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+    volumes:
+      - docchat-cache:/app/document_cache
+    depends_on:
+      - chroma
+    networks:
+      - docchat-network
+    restart: unless-stopped
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - docchat-chroma:/chroma/chroma
+    networks:
+      - docchat-network
+    restart: unless-stopped
+
+volumes:
+  docchat-chroma:
+  docchat-cache:
+
+networks:
+  docchat-network:
+    driver: bridge
+```
+
+### Variables de entorno con .env
+
+En vez de escribir API keys en el archivo, usa un archivo `.env`:
+
+```bash
+# .env
+OPENROUTER_API_KEY=sk-tu-api-key
+```
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+```
+
+Docker Compose lee automáticamente el archivo `.env`.
+
+### Puertos
+
+Si el puerto 5000 ya está en uso, usa otro:
+
+```yaml
+ports:
+  - "5001:5000"    # host:container
+```
+
+Accedés desde `http://localhost:5001`
+
+### Volumes
+
+Los volumes persisten datos más allá de la vida del container:
+
+```yaml
+volumes:
+  - docchat-chroma:/chroma/chroma
+```
+
+### Networks
+
+Compose crea automáticamente una red para que los servicios se comuniquen:
+
+```yaml
+networks:
+  docchat-network:
+    driver: bridge
+```
+
+Dentro de esta red, la app se conecta a ChromaDB usando "chroma" como hostname.
+
+### Errores comunes
+
+| Error | Solución |
+|-------|----------|
+| "Port already in use" | Cambiar el puerto o matar el proceso |
+| "Container failed to start" | Ver logs: `docker compose logs app` |
+| "Name already in use" | `docker compose down` primero |
+
+### Flujo completo
+
+```
+1. Crear docker-compose.yml
+2. docker compose up -d
+3. Verificar: docker compose ps
+4. Probar: http://localhost:5001
+5. Ver logs: docker compose logs -f
+6. Parar: docker compose down
+```
