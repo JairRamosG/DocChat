@@ -61,20 +61,377 @@ def test_retriever_to_agent():
 > **Las pruebas unitarias verifican QUE funciona.  
 > Las pruebas de integración verifican CÓMO funciona junto.**
 
+---
+
+## Los 8 Pilares de Testing de Integración para Sistemas Multi-Agente
+
+Antes de escribir cualquier test, identificá CUÁL de estos pilares estás atacando. Cada test debe cubrir al menos uno.
+
+### Pilar 1: Flujo de datos entre nodos (Data Flow)
+
+**¿El output de un nodo es exactamente lo que el siguiente nodo espera?**
+
+Cada nodo recibe un output y lo usa como input. Si el formato no coincide, el sistema falla silenciosamente o crashea.
+
+```python
+# Ejemplo de problema:
+# check_relevance retorna {"is_relevant": True}
+# research espera documents en el state
+# Si research no recibe documents → error
+
+# Test que verifica esto:
+def test_research_receives_documents():
+    """Verifica que research recibe los documentos de check_relevance."""
+    # GIVEN
+    state = {
+        "question": "¿Qué es Python?",
+        "documents": [Document(page_content="Python es un lenguaje")],
+        "is_relevant": True
+    }
+    
+    # WHEN
+    workflow = AgentWorkflow()
+    result = workflow._research_step(state)
+    
+    # THEN
+    assert "draft_answer" in result
+    assert len(result["draft_answer"]) > 0
+```
+
+**Qué testear:**
+- Que el output de cada nodo sea el tipo de dato correcto
+- Que los campos obligatorios estén presentes
+- Que no se pierda información entre nodos
+
+---
+
+### Pilar 2: Manejo de estado (State Threading)
+
+**¿El AgentState se mantiene íntegro a lo largo del grafo?**
+
+LangGraph usa un diccionario `AgentState` que se va modificando. Cada nodo escribe algo y el siguiente lo lee.
+
+```python
+# Ejemplo de problema:
+# check_relevance escribe is_relevant=True
+# _decide_after_relevance_check lee is_relevant
+# Si el campo no existe → KeyError
+
+# Test que verifica esto:
+def test_state_maintains_all_fields():
+    """Verifica que el state tiene todos los campos necesarios."""
+    required_keys = [
+        "question", "documents", "draft_answer",
+        "verification_report", "is_relevant", "retriever"
+    ]
+    
+    state = AgentState(
+        question="test",
+        documents=[],
+        draft_answer="",
+        verification_report="",
+        is_relevant=False,
+        retriever=MagicMock()
+    )
+    
+    for key in required_keys:
+        assert key in state
+```
+
+**Qué testear:**
+- Que cada campo del state se mantenga entre nodos
+- Que no se sobreescriba información importante
+- Que los campos opcionales tengan defaults válidos
+
+---
+
+### Pilar 3: Rutinado condicional (Routing)
+
+**¿Las bifurcaciones del grafo llevan al nodo correcto?**
+
+El grafo tiene decisiones. Si el routing falla, el sistema va por el camino equivocado.
+
+```python
+# Ejemplo de problema:
+# RelevanceClassifier retorna "CAN_ANSWER"
+# Pero el routing lo manda a END en vez de research
+
+# Test que verifica esto:
+def test_can_answer_routes_to_research():
+    """Verifica que CAN_ANSWER va a research, no a END."""
+    # GIVEN
+    workflow = AgentWorkflow()
+    state = {"is_relevant": True}
+    
+    # WHEN
+    result = workflow._decide_after_relevance_check(state)
+    
+    # THEN
+    assert result == "relevant"  # Debe ir a research
+
+def test_no_match_routes_to_end():
+    """Verifica que NO_MATCH va a END."""
+    workflow = AgentWorkflow()
+    state = {"is_relevant": False}
+    result = workflow._decide_after_relevance_check(state)
+    assert result == "irrelevant"
+```
+
+**Qué testear:**
+- Que cada clasificación lleve al nodo correcto
+- Que NO_MATCH no llegue a research
+- Que verify con Supported: NO haga re_research
+- Que Supported: YES termine en END
+
+---
+
+### Pilar 4: Formateo de respuestas del LLM (LLM Output Contract)
+
+**¿El sistema tolera respuestas malformadas del LLM?**
+
+Los LLMs son impredecibles. A veces responden "YES", a veces "Yes", a veces "YES.".
+
+```python
+# Ejemplo de problema:
+# RelevanceChecker espera: "CAN_ANSWER", "PARTIAL", "NO_MATCH"
+# LLM responde: "Yes, can answer" → ValueError → NO_MATCH silencioso
+
+# Test que verifica esto:
+def test_handles_malformed_llm_response():
+    """Verifica que el sistema maneja respuestas inválidas del LLM."""
+    # GIVEN
+    checker = RelevanceChecker()
+    checker.model = MagicMock()
+    
+    # LLM responde algo inválido
+    mock_response = MagicMock()
+    mock_response.content = "Yes, I think this is relevant"
+    checker.model.invoke.return_value = mock_response
+    
+    mock_retriever = MagicMock()
+    mock_retriever.invoke.return_value = [MagicMock()]
+    
+    # WHEN
+    result = checker.check("test question", mock_retriever)
+    
+    # THEN
+    # Debe caer en NO_MATCH, no crashear
+    assert result == RelevanceClassification.NO_MATCH
+```
+
+**Qué testear:**
+- Respuestas con formato inesperado (maiúsculas, espacios, puntuación)
+- Respuestas vacías del LLM
+- Respuestas en idioma diferente
+- Strings muy largos o muy cortos
+
+---
+
+### Pilar 5: Manejo de errores y resiliencia (Error Propagation)
+
+**¿Cuándo algo falla, el sistema lo maneja graciosamente?**
+
+Cuando un componente falla, el sistema debe producir un resultado controlado, no un crash.
+
+```python
+# Ejemplo de problema:
+# OpenRouter API cae → ResearchAgent lanza excepción
+# El workflow no la maneja → la app crashea
+
+# Test que verifica esto:
+def test_workflow_handles_api_error():
+    """Verifica que el workflow maneja errores de API."""
+    # GIVEN
+    workflow = AgentWorkflow()
+    workflow.researcher = MagicMock()
+    workflow.researcher.generate.side_effect = Exception("API Error")
+    
+    state = {"question": "test", "documents": [MagicMock()]}
+    
+    # WHEN/THEN
+    # No debe crashear el workflow completo
+    with pytest.raises(Exception):
+        workflow._research_step(state)
+```
+
+**Qué testear:**
+- API de OpenRouter cae → fallback o mensaje de error
+- ChromaDB no responde → retry o degradación
+- Documento corrupto → skip, no crash
+- Timeout del LLM → respuesta por defecto
+
+---
+
+### Pilar 6: Integridad del contexto (Context Integrity)
+
+**¿El contexto viaja completo desde los documentos hasta la respuesta final?**
+
+El contexto se puede corruptear o perder por el camino.
+
+```python
+# Ejemplo de problema:
+# research usa 3 documentos para generar respuesta
+# verify recibe solo 1 documento → verificación incompleta
+
+# Test que verifica esto:
+def test_context_preserved_between_research_and_verify():
+    """Verifica que verify recibe el mismo contexto que research."""
+    # GIVEN
+    documents = [
+        Document(page_content="Doc 1: Python es un lenguaje"),
+        Document(page_content="Doc 2: Fue creado en 1991"),
+        Document(page_content="Doc 3: Se usa para IA"),
+    ]
+    
+    agent = ResearchAgent()
+    agent.model = MagicMock()
+    agent.model.invoke.return_value = MagicMock(content="Python es un lenguaje de IA")
+    
+    verifier = VerificationAgent()
+    verifier.structured_model = MagicMock()
+    verifier.structured_model.invoke.return_value = VerificationReport(
+        supported="YES", relevant="YES"
+    )
+    
+    # WHEN
+    agent_result = agent.generate("¿Qué es Python?", documents)
+    context_used = agent_result["context_used"]
+    
+    # THEN
+    assert "Doc 1" in context_used
+    assert "Doc 2" in context_used
+    assert "Doc 3" in context_used
+```
+
+**Qué testear:**
+- Que el contexto completo llegue de research a verify
+- Que no se pierdan documentos en el camino
+- Que la información relevante esté presente
+
+---
+
+### Pilar 7: Tiempos de ejecución (Performance Budget)
+
+**¿Cada nodo termina dentro de un tiempo razonable?**
+
+Cada nodo tiene un costo. Si uno se tarda demasiado, el usuario espera.
+
+```python
+# Ejemplo de problema:
+# verify se tarda 30 segundos → usuario cierra la app
+
+# Test que verifica esto:
+def test_research_step_performance():
+    """Verifica que research termina en menos de 5 segundos."""
+    import time
+    
+    # GIVEN
+    agent = ResearchAgent()
+    agent.model = MagicMock()
+    agent.model.invoke.return_value = MagicMock(content="respuesta")
+    
+    docs = [Document(page_content="test")]
+    
+    # WHEN
+    start = time.time()
+    result = agent.generate("test", docs)
+    elapsed = time.time() - start
+    
+    # THEN
+    assert elapsed < 5.0
+```
+
+**Qué testear:**
+- Que cada nodo termine en tiempo aceptable
+- Que el pipeline completo no exceda el presupuesto
+- Que no haya timeouts innecesarios
+
+---
+
+### Pilar 8: Casos extremos (Edge Cases)
+
+**¿El sistema maneja situaciones inusuales sin crashear?**
+
+Los sistemas fallan en los bordes, no en el centro.
+
+```python
+# Ejemplo de problema:
+# Pregunta vacía → el LLM recibe prompt vacío → error
+
+# Test que verifica esto:
+def test_empty_question_handled():
+    """Verifica que preguntas vacías se manejan correctamente."""
+    workflow = AgentWorkflow()
+    workflow.relevance_checker = MagicMock()
+    workflow.relevance_checker.check.return_value = RelevanceClassification.NO_MATCH
+    
+    state = {"question": "", "retriever": MagicMock()}
+    result = workflow._check_relevance_step(state)
+    
+    assert result["is_relevant"] is False
+
+def test_special_characters_in_question():
+    """Verifica que caracteres especiales no crashean el sistema."""
+    # GIVEN
+    question = "¿Qué es ñoño? 🤔 Test: @#$%^&*()"
+    
+    checker = RelevanceChecker()
+    checker.model = MagicMock()
+    checker.model.invoke.return_value = MagicMock(content="NO_MATCH")
+    
+    mock_retriever = MagicMock()
+    mock_retriever.invoke.return_value = [MagicMock()]
+    
+    # WHEN
+    result = checker.check(question, mock_retriever)
+    
+    # THEN
+    assert result == RelevanceClassification.NO_MATCH
+```
+
+**Qué testear:**
+- Preguntas vacías
+- Documentos vacíos
+- Preguntas en idioma diferente
+- Caracteres especiales: ñ, á, é, emojis
+- Documentos de 1 página vs 500 páginas
+- Misma pregunta 2 veces seguidas
+
+---
+
+## Prioridad de los pilares
+
+```
+1. Routing          → Si falla, todo lo demás no importa
+2. Data Flow        → Si los formatos no coinciden, explota
+3. Error Handling   → Si no maneja errores, crashea en producción
+4. LLM Contract     → Los LLMs son impredecibles
+5. Context          → Sin contexto correcto, las respuestas son malas
+6. Edge Cases       → Los bordes son donde falla la gente
+7. Performance      → Importante pero no crítico
+8. State            → Ya cubierto parcialmente por los demás
+```
+
+---
+
 ## Estructura de carpetas
 
 ```
 tests/
-├── unit/                    # Pruebas unitarias (ya tienes)
-│   ├── test_constants.py
-│   ├── test_settings.py
-│   └── ...
-├── integration/             # Pruebas de integración (NUEVO)
+├── unit/                    # Pruebas unitarias
+│   ├── test_agents.py
+│   ├── test_document_processor.py
+│   ├── test_retriever.py
+│   ├── test_config.py
+│   └── test_utils.py
+├── integration/             # Pruebas de integración
 │   ├── __init__.py
-│   ├── test_retriever_agent.py
-│   ├── test_document_pipeline.py
-│   ├── test_workflow_integration.py
-│   └── conftest.py          # Fixtures compartidos
+│   ├── test_document_processing.py
+│   ├── test_workflow_routing.py      # Pilar 3: Routing
+│   ├── test_data_flow.py             # Pilar 1: Data Flow
+│   ├── test_error_handling.py        # Pilar 5: Error Handling
+│   ├── test_llm_contract.py          # Pilar 4: LLM Contract
+│   └── conftest.py                   # Fixtures compartidos
 └── pipeline/                # Pruebas E2E (futuro)
     ├── __init__.py
     └── test_full_pipeline.py
@@ -128,143 +485,6 @@ def mock_openrouter():
             content="Python es un lenguaje interpretado creado en 1991."
         )
         yield mock
-```
-
-## Los 5 tipos de pruebas de integración
-
-### 1. Prueba de flujo de datos
-
-**¿Los datos fluyen correctamente entre módulos?**
-
-```python
-def test_retriever_passes_docs_to_agent(sample_documents):
-    """Verifica que el retriever pasa documentos al agente."""
-    # GIVEN
-    retriever = MagicMock()
-    retriever.invoke.return_value = sample_documents
-    
-    agent = ResearchAgent()
-    agent.model = MagicMock()
-    agent.model.invoke.return_value = MagicMock(content="Respuesta")
-    
-    # WHEN
-    docs = retriever.invoke("¿Qué es Python?")
-    result = agent.generate("¿Qué es Python?", docs)
-    
-    # THEN
-    assert len(docs) == 3
-    assert "draft_answer" in result
-```
-
-### 2. Prueba de formato
-
-**¿El output de un módulo es compatible con el input del siguiente?**
-
-```python
-def test_agent_output_format_for_verifier():
-    """Verifica que el output del agente es válido para el verificador."""
-    # GIVEN
-    agent = ResearchAgent()
-    agent.model = MagicMock()
-    agent.model.invoke.return_value = MagicMock(content="Python es un lenguaje.")
-    
-    verifier = VerificationAgent()
-    verifier.structured_model = MagicMock()
-    verifier.structured_model.invoke.return_value = VerificationReport(
-        supported="YES", relevant="YES"
-    )
-    
-    # WHEN
-    mock_doc = Document(page_content="Python es un lenguaje.")
-    agent_result = agent.generate("¿Qué es Python?", [mock_doc])
-    
-    # Verificar que el output del agente funciona como input del verificador
-    verifier_result = verifier.check(agent_result["draft_answer"], [mock_doc])
-    
-    # THEN
-    assert "verification_report" in verifier_result
-```
-
-### 3. Prueba de comportamiento conjunto
-
-**¿Los módulos toman decisiones correctas juntos?**
-
-```python
-def test_relevance_checker_to_research_flow():
-    """Verifica el flujo: relevancia → investigación."""
-    # GIVEN
-    checker = RelevanceChecker()
-    checker.model = MagicMock()
-    checker.model.invoke.return_value = MagicMock(content="CAN_ANSWER")
-    
-    researcher = ResearchAgent()
-    researcher.model = MagicMock()
-    researcher.model.invoke.return_value = MagicMock(content="Respuesta")
-    
-    mock_retriever = MagicMock()
-    mock_retriever.invoke.return_value = [
-        Document(page_content="Contenido relevante")
-    ]
-    
-    # WHEN
-    classification = checker.check("¿Qué es Python?", mock_retriever)
-    
-    if classification == RelevanceClassification.CAN_ANSWER:
-        docs = mock_retriever.invoke("¿Qué es Python?")
-        result = researcher.generate("¿Qué es Python?", docs)
-    
-    # THEN
-    assert classification == RelevanceClassification.CAN_ANSWER
-    assert "draft_answer" in result
-```
-
-### 4. Prueba de manejo de errores
-
-**¿Qué pasa cuando un módulo falla?**
-
-```python
-def test_workflow_handles_api_error():
-    """Verifica que el workflow maneja errores de API."""
-    # GIVEN
-    with patch("agents.workflow.ResearchAgent") as MockAgent:
-        MockAgent.return_value.generate.side_effect = Exception("API Error")
-        
-        workflow = AgentWorkflow()
-        workflow.researcher = MockAgent.return_value
-        
-        # WHEN/THEN
-        with pytest.raises(Exception):
-            workflow._research_step({
-                "question": "test",
-                "documents": [Document(page_content="test")]
-            })
-```
-
-### 5. Prueba de rendimiento básico
-
-**¿Los módulos trabajan juntos sin ser extremadamente lentos?**
-
-```python
-import time
-
-def test_retriever_to_agent_performance(sample_documents):
-    """Verifica que el flujo completo toma menos de 5 segundos."""
-    # GIVEN
-    retriever = MagicMock()
-    retriever.invoke.return_value = sample_documents
-    
-    agent = ResearchAgent()
-    agent.model = MagicMock()
-    agent.model.invoke.return_value = MagicMock(content="Respuesta")
-    
-    # WHEN
-    start = time.time()
-    docs = retriever.invoke("test")
-    result = agent.generate("test", docs)
-    elapsed = time.time() - start
-    
-    # THEN
-    assert elapsed < 5.0  # Debe tomar menos de 5 segundos
 ```
 
 ## ¿Cuándo MOCKEAR y cuándo NO?
@@ -402,6 +622,7 @@ def test_use_user():
 □ ¿Qué dependencias externas necesito mockear?
 □ ¿Qué output genera un módulo que es input del siguiente?
 □ ¿Qué errores pueden ocurrir en la cadena?
+□ ¿Qué pilar de los 8 estoy atacando?
 ```
 
 ## La regla de oro para integración
