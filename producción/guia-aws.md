@@ -45,35 +45,118 @@ Fargate:
 
 ## Arquitectura recomendada para portafolio
 
+### Vista completa del sistema
+
 ```
-                    INTERNET
-                       │
-                       ▼
-              ┌────────────────┐
-              │   Route 53     │  ← Dominio (opcional)
-              │   (DNS)        │
-              └───────┬────────┘
-                      │
-                      ▼
-              ┌────────────────┐
-              │      ALB       │  ← Application Load Balancer
-              │  (Puerto 80)   │     Distribuye tráfico
-              └───────┬────────┘
-                      │
-                      ▼
-              ┌────────────────┐
-              │   ECS Fargate  │  ← Ejecuta tu container
-              │  (Gradio App)  │     Sin managing EC2
-              │  Puerto 5000   │
-              └───────┬────────┘
-                      │
-          ┌───────────┼───────────┐
-          │           │           │
-          ▼           ▼           ▼
-   ┌──────────┐ ┌──────────┐ ┌──────────┐
-   │ ChromaDB │ │   EFS    │ │ Secrets  │
-   │ Fargate  │ │(Almacen.)│ │ Manager  │
-   └──────────┘ └──────────┘ └──────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          INTERNET                                   │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  🌐 Route 53 (DNS)              │  docchat.tudominio.com           │
+│     "Traducir nombre → IP"      │  (Opcional: $0.50/mes)           │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  ⚖️  ALB (Load Balancer)         │  Puerto 80/443                   │
+│     "Distribuir tráfico"         │  (Opcional: ~$16/mes)            │
+│     Recibe HTTP → Envía a ECS    │                                  │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  🐳 ECS Fargate (Containers)    │  Tu app + ChromaDB                │
+│     "Correr Docker sin EC2"      │  ~$15/mes (0.25 vCPU, 512MB)     │
+│                                  │                                  │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Container 1: Gradio App         Container 2: ChromaDB     │    │
+│  │  ┌─────────────────────┐         ┌─────────────────────┐   │    │
+│  │  │ 📄 app.py           │         │ 🗄️ chromaDB         │   │    │
+│  │  │ 🤖 agents/workflow  │◄───────►│ Puerto 8000         │   │    │
+│  │  │ Puerto 5000         │  Red    │                     │   │    │
+│  │  └─────────────────────┘  ECS    └──────────┬──────────┘   │    │
+│  └─────────────────────────────────────────────┼──────────────┘    │
+└────────────────────────────────────────────────┼────────────────────┘
+                                                 │
+                               ┌─────────────────┼─────────────────┐
+                               │                 │                 │
+                               ▼                 ▼                 ▼
+                    ┌──────────────────┐ ┌──────────────┐ ┌────────────────┐
+                    │ 💾 EFS           │ │ 🔐 Secrets   │ │ 📊 CloudWatch  │
+                    │ "Disco en la     │ │ Manager      │ │ "Logs y        │
+                    │  nube"           │ │ "Cajón       │ │  Monitoreo"    │
+                    │ ChromaDB data    │ │  fuerte"     │ │ Gratis         │
+                    │ ~$0.30/GB/mes    │ │ API keys     │ │                │
+                    └──────────────────┘ │ ~$0.40/mes   │ └────────────────┘
+                                         └──────────────┘
+```
+
+### Flujo de datos de un usuario
+
+```
+    👤 Usuario                    ☁️  AWS
+    ─────────                     ────────
+         │
+         │  1. Sube PDF + pregunta
+         │  ─────────────────────►
+         │                         ALB recibe request
+         │                              │
+         │                         ECS Fargate (Gradio)
+         │                              │
+         │                         ┌────┴────┐
+         │                         │         │
+         │                         ▼         ▼
+         │                    Docling    OpenRouter
+         │                   (procesa)   (LLM API)
+         │                         │         │
+         │                         ▼         ▼
+         │                    ChromaDB   Respuesta
+         │                   (guarda     generada
+         │                    vectores)
+         │                              │
+         │  2. Recibe respuesta         │
+         │  ◄───────────────────────────┘
+         │
+```
+
+### Despliegue paso a paso
+
+```
+    📦 Tu máquina                    ☁️  AWS
+    ─────────────                    ────────
+    
+    docker build -t docchat:v1.0 .
+           │
+           │  docker push
+           ▼
+    ┌──────────────┐           ┌──────────────────┐
+    │  ECR         │  ◄──────  │  aws ecr push    │
+    │  (repositorio│           │                  │
+    │   de imágenes│           │  "Guardé tu      │
+    │   Docker)    │           │   imagen"        │
+    └──────┬───────┘           └──────────────────┘
+           │
+           │  ECS descarga
+           ▼
+    ┌──────────────┐           ┌──────────────────┐
+    │  ECS         │  ◄──────  │  aws ecs create  │
+    │  Fargate     │           │  -service        │
+    │  (ejecuta)   │           │                  │
+    └──────┬───────┘           │  "Ejecuté tu     │
+           │                   │   container"     │
+           │                   └──────────────────┘
+           ▼
+    ┌──────────────┐           ┌──────────────────┐
+    │  ALB         │  ◄──────  │  aws elbv2       │
+    │  (acceso     │           │  create-elb      │
+    │   internet)  │           │                  │
+    └──────────────┘           │  "Listo, ya      │
+                               │   tenés URL"     │
+                               └──────────────────┘
+                               
+    Resultado: http://<alb-url> → Tu app DocChat 🎉
 ```
 
 ---
@@ -260,29 +343,100 @@ Total:                               ~$10/mes
 ### Flujo de despliegue
 
 ```
-1. Vos: docker build -t docchat:v1.0 .
-2. Vos: aws ecr create-repository --repository-name docchat
-3. Vos: docker tag docchat:v1.0 <ecr-url>:v1.0
-4. Vos: docker push <ecr-url>:v1.0
-5. AWS: "Guardé tu imagen en ECR"
-6. Vos: aws ecs create-service --task-definition docchat
-7. AWS: "Descargo la imagen de ECR, creo el container, lo conecto a ALB"
-8. Usuario: www.docchat.com → ALB → ECS → Tu app
+    📦 Tu máquina                          ☁️  AWS
+    ─────────────                          ────────
+    
+    PASO 1: Crear repositorio
+    $ aws ecr create-repository            ┌──────────────┐
+    ─────────────────────────────────────►  │  ECR         │
+                                            │  "Listo,     │
+                                            │   guardá     │
+                                            │   imágenes"  │
+                                            └──────────────┘
+    
+    PASO 2: Subir imagen Docker
+    $ docker build -t docchat:v1.0 .       ┌──────────────┐
+    $ docker push <ecr-url>:v1.0   ──────► │  ECR         │
+                                            │  "Guardé     │
+                                            │   docchat    │
+                                            │   :v1.0"     │
+                                            └──────────────┘
+    
+    PASO 3: Crear cluster y task
+    $ aws ecs create-cluster               ┌──────────────┐
+    $ aws ecs register-task-def   ────────►│  ECS         │
+                                            │  "Definición │
+                                            │   registrada"│
+                                            └──────────────┘
+    
+    PASO 4: Crear service
+    $ aws ecs create-service               ┌──────────────┐
+    ──────────────────────────────────────► │  ECS         │
+                                            │  "Container  │
+                                            │   corriendo  │
+                                            │   ✅"        │
+                                            └──────────────┘
+    
+    PASO 5: Verificar
+    $ aws logs tail /ecs/docchat           ┌──────────────┐
+    ──────────────────────────────────────► │  CloudWatch  │
+                                            │  "App        │
+                                            │   iniciada   │
+                                            │   en :5000"  │
+                                            └──────────────┘
+    
+    🎉 LISTO: http://<ip-publica>:5000 → DocChat funcionando
 ```
 
-### Flujo de ejecución
+### Flujo de ejecución (cuando un usuario usa la app)
 
 ```
-Usuario sube documento
-    → ALB recibe request
-    → ECS (Gradio) recibe el archivo
-    → Docling procesa el documento
-    → Embeddings se guardan en ChromaDB (con EFS)
-    → Usuario hace pregunta
-    → Relevance Checker verifica
-    → Research Agent genera respuesta
-    → Verification Agent verifica
-    → Respuesta vuelve al usuario
+    👤 Usuario                        ☁️  AWS
+    ─────────                         ────────
+    
+    1. Abre http://docchat.com
+    ─────────────────────────────►    ALB recibe HTTP
+                                       │
+    2. Sube "certificado.pdf"          ▼
+    ─────────────────────────────►    ECS (Gradio App)
+                                       │
+                                  ┌────┴────┐
+                                  │         │
+                                  ▼         ▼
+                             ┌─────────┐ ┌──────────┐
+                             │ Docling │ │ OpenRouter│
+                             │procesa  │ │  (LLM)   │
+                             │el PDF   │ │          │
+                             └────┬────┘ └────┬─────┘
+                                  │           │
+                                  ▼           │
+                             ┌─────────┐      │
+                             │ChromaDB │      │
+                             │guarda   │      │
+                             │vectores │      │
+                             └────┬────┘      │
+                                  │           │
+    3. Escribe pregunta            │           │
+    ─────────────────────────────►│           │
+                                  ▼           ▼
+                             ┌─────────────────────┐
+                             │  Workflow Multi-agente│
+                             │  ┌───────────────┐  │
+                             │  │Relevance Check│  │
+                             │  └───────┬───────┘  │
+                             │          ▼          │
+                             │  ┌───────────────┐  │
+                             │  │    Research    │  │
+                             │  └───────┬───────┘  │
+                             │          ▼          │
+                             │  ┌───────────────┐  │
+                             │  │  Verification  │  │
+                             │  └───────┬───────┘  │
+                             │          ▼          │
+                             └──────────┬──────────┘
+                                        │
+    4. Recibe respuesta                 │
+    ◄───────────────────────────────────┘
 ```
 
 ---
