@@ -1,6 +1,6 @@
 # DocChat
 
-> Sistema multi-agente RAG para análisis de documentos usando LangGraph y OpenRouter.
+> Sistema multi-agente con RAG para análisis de documentos usando LangGraph y OpenRouter.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-412991?style=for-the-badge&logo=langchain&logoColor=white)
